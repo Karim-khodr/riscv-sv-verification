@@ -1,87 +1,121 @@
+`timescale 1ns/1ps
+
 module alu_tb;
 
-    logic [31:0] a;
-    logic [31:0] b;
-    logic [3:0]  alu_op;
-    logic [31:0] result;
-    logic        zero;
+  import cpu_pkg::*;
 
-    int tests_run;
-    int tests_failed;
+  logic [31:0] a;
+  logic [31:0] b;
+  alu_op_e     op;
+  logic [31:0] y;
+  logic        zero;
 
-    localparam logic [3:0] ALU_ADD = 4'b0000;
-    localparam logic [3:0] ALU_SUB = 4'b0001;
-    localparam logic [3:0] ALU_AND = 4'b0010;
-    localparam logic [3:0] ALU_OR  = 4'b0011;
-    localparam logic [3:0] ALU_XOR = 4'b0100;
+  int unsigned num_tests;
+  int unsigned num_fails;
 
-    alu dut (
-        .a(a),
-        .b(b),
-        .alu_op(alu_op),
-        .result(result),
-        .zero(zero)
-    );
+  alu dut (
+    .a    (a),
+    .b    (b),
+    .op   (op),
+    .y    (y),
+    .zero (zero)
+  );
 
-    task automatic check(
-        input string       test_name,
-        input logic [3:0]  test_op,
-        input logic [31:0] test_a,
-        input logic [31:0] test_b,
-        input logic [31:0] expected_result
-    );
-        logic expected_zero;
+  function automatic logic [31:0] alu_ref (
+    input logic [31:0] ref_a,
+    input logic [31:0] ref_b,
+    input alu_op_e     ref_op
+  );
+    unique case (ref_op)
+      ALU_ADD: alu_ref = ref_a + ref_b;
+      ALU_SUB: alu_ref = ref_a - ref_b;
+      ALU_AND: alu_ref = ref_a & ref_b;
+      ALU_OR : alu_ref = ref_a | ref_b;
+      ALU_XOR: alu_ref = ref_a ^ ref_b;
+      default: alu_ref = 32'h0000_0000;
+    endcase
+  endfunction
 
-        begin
-            a      = test_a;
-            b      = test_b;
-            alu_op = test_op;
+  function automatic alu_op_e random_op();
+    case ($urandom_range(0, 4))
+      0: random_op = ALU_ADD;
+      1: random_op = ALU_SUB;
+      2: random_op = ALU_AND;
+      3: random_op = ALU_OR;
+      4: random_op = ALU_XOR;
+      default: random_op = ALU_ADD;
+    endcase
+  endfunction
 
-            #1;
+  task automatic check_alu (
+    input logic [31:0] test_a,
+    input logic [31:0] test_b,
+    input alu_op_e     test_op
+  );
+    logic [31:0] expected_y;
+    logic        expected_zero;
 
-            expected_zero = (expected_result == 32'd0);
-            tests_run++;
+    a  = test_a;
+    b  = test_b;
+    op = test_op;
 
-            if (result !== expected_result || zero !== expected_zero) begin
-                tests_failed++;
+    #1;
 
-                $display("FAIL: %s", test_name);
-                $display("  a        = 0x%08h", test_a);
-                $display("  b        = 0x%08h", test_b);
-                $display("  alu_op   = 0x%0h", test_op);
-                $display("  result   = 0x%08h, expected 0x%08h", result, expected_result);
-                $display("  zero     = %0b, expected %0b", zero, expected_zero);
-            end else begin
-                $display("PASS: %s", test_name);
-            end
-        end
-    endtask
+    expected_y    = alu_ref(test_a, test_b, test_op);
+    expected_zero = (expected_y == 32'd0);
 
-    initial begin
-        $dumpfile("waves/alu_tb.vcd");
-        $dumpvars(0, alu_tb);
+    num_tests++;
 
-        tests_run    = 0;
-        tests_failed = 0;
+    assert (y === expected_y)
+      else begin
+        $error("ALU mismatch: a=%h b=%h op=%0d expected=%h got=%h",
+               test_a, test_b, test_op, expected_y, y);
+        num_fails++;
+      end
 
-        check("ADD simple",        ALU_ADD, 32'd2,         32'd3,         32'd5);
-        check("ADD wraparound",    ALU_ADD, 32'hFFFF_FFFF, 32'd1,         32'd0);
-        check("SUB simple",        ALU_SUB, 32'd10,        32'd4,         32'd6);
-        check("SUB zero result",   ALU_SUB, 32'd7,         32'd7,         32'd0);
-        check("AND pattern",       ALU_AND, 32'hF0F0_1234, 32'h0FF0_FFFF, 32'h00F0_1234);
-        check("OR pattern",        ALU_OR,  32'hF000_0000, 32'h0000_00FF, 32'hF000_00FF);
-        check("XOR pattern",       ALU_XOR, 32'hAAAA_5555, 32'hFFFF_0000, 32'h5555_5555);
+    assert (zero === expected_zero)
+      else begin
+        $error("ZERO mismatch: y=%h expected_zero=%b got_zero=%b",
+               y, expected_zero, zero);
+        num_fails++;
+      end
+  endtask
 
-        $display("");
-        $display("ALU tests run:    %0d", tests_run);
-        $display("ALU tests failed: %0d", tests_failed);
+  initial begin
+    $dumpfile("alu_tb.vcd");
+    $dumpvars(0, alu_tb);
 
-        if (tests_failed == 0) begin
-            $display("ALU TESTS PASSED");
-            $finish;
-        end else begin
-            $fatal(1, "ALU TESTS FAILED");
-        end
+    num_tests = 0;
+    num_fails = 0;
+
+    $display("Starting ALU directed tests...");
+
+    check_alu(32'd1,        32'd1,        ALU_ADD);
+    check_alu(32'd10,       32'd3,        ALU_SUB);
+    check_alu(32'hFFFF0000, 32'h00FFFF00, ALU_AND);
+    check_alu(32'hFFFF0000, 32'h00FFFF00, ALU_OR);
+    check_alu(32'hAAAA5555, 32'hFFFF0000, ALU_XOR);
+
+    check_alu(32'd0,        32'd0,        ALU_ADD);
+    check_alu(32'd5,        32'd5,        ALU_SUB);
+    check_alu(32'hFFFF_FFFF, 32'd1,       ALU_ADD);
+    check_alu(32'd0,        32'd1,        ALU_SUB);
+
+    $display("Starting ALU random tests...");
+
+    for (int i = 0; i < 1000; i++) begin
+      check_alu($urandom(), $urandom(), random_op());
     end
+
+    if (num_fails == 0) begin
+      $display("ALU TEST PASSED: %0d tests run, %0d failures",
+               num_tests, num_fails);
+    end else begin
+      $display("ALU TEST FAILED: %0d tests run, %0d failures",
+               num_tests, num_fails);
+    end
+
+    $finish;
+  end
 
 endmodule
