@@ -1,7 +1,21 @@
+# Verilator build outputs
+sim/obj_dir/
+sim/obj_dir_*/
 obj_dir/
+obj_dir_*/
+
+# Waveforms
 *.vcd
 *.fst
+*.gtkw.bak
+
+# Logs
 *.log
-waves/*.vcd
-waves/*.fst
-__pycache__/
+
+# Editor files
+.vscode/
+*.swp
+.DS_Store
+
+# Generated binaries
+V*
