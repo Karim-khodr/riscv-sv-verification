@@ -1,5 +1,3 @@
-# RISC-V-CPU-Core
-
 # RISC-V SystemVerilog Verification Project
 
 This project builds and verifies a small single-cycle RV32I RISC-V CPU subset using SystemVerilog and Verilator.
