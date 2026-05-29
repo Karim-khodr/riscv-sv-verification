@@ -10,4 +10,10 @@ package cpu_pkg;
     ALU_XOR = 4'd4
   } alu_op_e;
 
+    typedef enum logic [1:0] {
+    IMM_I = 2'd0,
+    IMM_S = 2'd1,
+    IMM_B = 2'd2
+  } imm_type_e;
+
 endpackage

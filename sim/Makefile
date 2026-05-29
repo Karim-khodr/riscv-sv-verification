@@ -5,6 +5,12 @@ VERILATOR_FLAGS = -Wall --timing --assert -I../rtl
 TOP_ALU = alu_tb
 TOP_REGFILE = regfile_tb
 
+TOP_IMM_GEN = imm_gen_tb
+OBJ_DIR_IMM_GEN = obj_dir_imm_gen
+
+RTL_IMM_GEN = ../rtl/cpu_pkg.sv ../rtl/imm_gen.sv
+TB_IMM_GEN = ../tb/imm_gen_tb.sv
+
 OBJ_DIR_ALU = obj_dir_alu
 OBJ_DIR_REGFILE = obj_dir_regfile
 
@@ -14,9 +20,9 @@ TB_ALU = ../tb/alu_tb.sv
 RTL_REGFILE = ../rtl/regfile.sv
 TB_REGFILE = ../tb/regfile_tb.sv
 
-.PHONY: all alu regfile lint lint-alu lint-regfile wave-alu wave-regfile clean
+.PHONY: all alu regfile imm-gen lint lint-alu lint-regfile lint-imm-gen wave-alu wave-regfile wave-imm-gen clean
 
-all: alu regfile
+all: alu regfile imm-gen
 
 alu:
 	$(VERILATOR) $(VERILATOR_FLAGS) --binary --trace \
@@ -32,7 +38,7 @@ regfile:
 		-Mdir $(OBJ_DIR_REGFILE)
 	./$(OBJ_DIR_REGFILE)/V$(TOP_REGFILE)
 
-lint: lint-alu lint-regfile
+lint: lint-alu lint-regfile lint-imm-gen
 
 lint-alu:
 	$(VERILATOR) --lint-only $(VERILATOR_FLAGS) \
@@ -50,5 +56,20 @@ wave-alu:
 wave-regfile:
 	gtkwave regfile_tb.vcd
 
+imm-gen:
+	$(VERILATOR) $(VERILATOR_FLAGS) --binary --trace \
+		$(RTL_IMM_GEN) $(TB_IMM_GEN) \
+		--top-module $(TOP_IMM_GEN) \
+		-Mdir $(OBJ_DIR_IMM_GEN)
+	./$(OBJ_DIR_IMM_GEN)/V$(TOP_IMM_GEN)
+
+lint-imm-gen:
+	$(VERILATOR) --lint-only $(VERILATOR_FLAGS) \
+		$(RTL_IMM_GEN) $(TB_IMM_GEN) \
+		--top-module $(TOP_IMM_GEN)
+
+wave-imm-gen:
+	gtkwave imm_gen_tb.vcd
+
 clean:
-	rm -rf $(OBJ_DIR_ALU) $(OBJ_DIR_REGFILE) *.vcd
+	rm -rf $(OBJ_DIR_ALU) $(OBJ_DIR_REGFILE) $(OBJ_DIR_IMM_GEN) *.vcd
