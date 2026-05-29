@@ -1,28 +1,39 @@
-module alu (
-    input  logic [31:0] a,
-    input  logic [31:0] b,
-    input  logic [3:0]  alu_op,
-    output logic [31:0] result,
-    output logic        zero
+`timescale 1ns/1ps
+
+module alu
+  import cpu_pkg::*;
+(
+  input  logic [31:0] a,
+  input  logic [31:0] b,
+  input  alu_op_e     op,
+  output logic [31:0] y,
+  output logic        zero
 );
 
-    localparam logic [3:0] ALU_ADD = 4'b0000;
-    localparam logic [3:0] ALU_SUB = 4'b0001;
-    localparam logic [3:0] ALU_AND = 4'b0010;
-    localparam logic [3:0] ALU_OR  = 4'b0011;
-    localparam logic [3:0] ALU_XOR = 4'b0100;
+  always_comb begin
+    unique case (op)
+      ALU_ADD: y = a + b;
+      ALU_SUB: y = a - b;
+      ALU_AND: y = a & b;
+      ALU_OR : y = a | b;
+      ALU_XOR: y = a ^ b;
+      default: y = 32'h0000_0000;
+    endcase
+  end
 
-    always_comb begin
-        unique case (alu_op)
-            ALU_ADD: result = a + b;
-            ALU_SUB: result = a - b;
-            ALU_AND: result = a & b;
-            ALU_OR:  result = a | b;
-            ALU_XOR: result = a ^ b;
-            default: result = 32'hDEAD_BEEF;
-        endcase
-    end
+  assign zero = (y == 32'd0);
 
-    assign zero = (result == 32'd0);
+`ifndef SYNTHESIS
+  always_comb begin
+    assert (!$isunknown(a))
+      else $error("ALU input a contains X/Z");
+
+    assert (!$isunknown(b))
+      else $error("ALU input b contains X/Z");
+
+    assert (!$isunknown(op))
+      else $error("ALU op contains X/Z");
+  end
+`endif
 
 endmodule
