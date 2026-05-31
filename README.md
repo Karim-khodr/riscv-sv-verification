@@ -69,10 +69,10 @@ docs/       Test plan, verification report, notes, and diagrams
 * [x] ALU assertions added
 * [x] Verilator lint passing
 * [x] Waveform generation working
-* [ ] Register file
-* [ ] Immediate generator
-* [ ] Decoder
-* [ ] Control logic
+* [x] Register file
+* [x] Immediate generator
+* [x] Decoder
+* [x] Control logic
 * [ ] CPU integration
 * [ ] Program-level tests
 * [ ] Verification report
@@ -84,7 +84,7 @@ From the `sim/` directory:
 ```bash
 make clean
 make lint
-make alu
+make all
 ```
 
 To open the ALU waveform:
