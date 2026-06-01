@@ -22,14 +22,6 @@ Required instructions:
 * `sw`
 * `beq`
 
-Stretch instructions:
-
-* `sll`
-* `srl`
-* `slt`
-* `bne`
-* `jal`
-
 ## Tools
 
 * SystemVerilog
