@@ -40,16 +40,6 @@ Stretch instructions:
 * Python, optional for later test generation
 * Yosys, optional later for synthesis sanity checks
 
-## Project Structure
-
-```text
-rtl/        SystemVerilog RTL modules
-tb/         Self-checking testbenches
-programs/   Small RISC-V test programs or machine-code programs
-sim/        Makefile and simulation outputs
-docs/       Test plan, verification report, notes, and diagrams
-```
-
 ## Current Status
 
 * [x] Project structure created
