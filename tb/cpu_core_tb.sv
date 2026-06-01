@@ -1,0 +1,159 @@
+`timescale 1ns/1ps
+
+module cpu_core_tb;
+
+  logic clk   = 1'b0;
+  logic rst_n = 1'b0;
+
+  logic [31:0] pc_dbg;
+  logic [31:0] instr_dbg;
+  logic        illegal_instr_dbg;
+
+  int unsigned num_fails;
+
+  cpu_core dut (
+    .clk               (clk),
+    .rst_n             (rst_n),
+    .pc_dbg            (pc_dbg),
+    .instr_dbg         (instr_dbg),
+    .illegal_instr_dbg (illegal_instr_dbg)
+  );
+
+  always #5 clk <= ~clk;
+
+  function automatic logic [31:0] make_r_instr(
+    input logic [6:0] funct7,
+    input logic [4:0] rs2,
+    input logic [4:0] rs1,
+    input logic [2:0] funct3,
+    input logic [4:0] rd
+  );
+    make_r_instr = {funct7, rs2, rs1, funct3, rd, 7'b0110011};
+  endfunction
+
+  function automatic logic [31:0] make_i_instr(
+    input logic [11:0] imm12,
+    input logic [4:0]  rs1,
+    input logic [2:0]  funct3,
+    input logic [4:0]  rd,
+    input logic [6:0]  opcode
+  );
+    make_i_instr = {imm12, rs1, funct3, rd, opcode};
+  endfunction
+
+  function automatic logic [31:0] make_s_instr(
+    input logic [11:0] imm12,
+    input logic [4:0]  rs2,
+    input logic [4:0]  rs1,
+    input logic [2:0]  funct3
+  );
+    make_s_instr = {
+      imm12[11:5],
+      rs2,
+      rs1,
+      funct3,
+      imm12[4:0],
+      7'b0100011
+    };
+  endfunction
+
+  function automatic logic [31:0] make_b_instr(
+    input logic [12:1] imm_b,
+    input logic [4:0]  rs2,
+    input logic [4:0]  rs1,
+    input logic [2:0]  funct3
+  );
+    logic [31:0] temp_instr;
+
+    temp_instr = 32'h0000_0063;
+    temp_instr[31]    = imm_b[12];
+    temp_instr[7]     = imm_b[11];
+    temp_instr[30:25] = imm_b[10:5];
+    temp_instr[24:20] = rs2;
+    temp_instr[19:15] = rs1;
+    temp_instr[14:12] = funct3;
+    temp_instr[11:8]  = imm_b[4:1];
+    temp_instr[6:0]   = 7'b1100011;
+
+    make_b_instr = temp_instr;
+  endfunction
+
+  task automatic check_value(
+    input string       name,
+    input logic [31:0] got,
+    input logic [31:0] expected
+  );
+    if (got !== expected) begin
+      $error("%s mismatch: expected=%h got=%h", name, expected, got);
+      num_fails++;
+    end
+  endtask
+
+  task automatic load_program();
+    begin
+      // Program:
+      // x1 = 5
+      // x2 = 7
+      // x3 = x1 + x2 = 12
+      // mem[0] = x3
+      // x4 = mem[0]
+      // if x3 == x4, skip next instruction
+      // x5 = 1       // should be skipped
+      // x6 = x3 ^ x4 // should be 0
+      // invalid instruction = halt
+
+      dut.u_imem.mem[0] = make_i_instr(12'd5,  5'd0, 3'b000, 5'd1, 7'b0010011); // addi x1, x0, 5
+      dut.u_imem.mem[1] = make_i_instr(12'd7,  5'd0, 3'b000, 5'd2, 7'b0010011); // addi x2, x0, 7
+      dut.u_imem.mem[2] = make_r_instr(7'b0000000, 5'd2, 5'd1, 3'b000, 5'd3);   // add x3, x1, x2
+      dut.u_imem.mem[3] = make_s_instr(12'd0,  5'd3, 5'd0, 3'b010);             // sw x3, 0(x0)
+      dut.u_imem.mem[4] = make_i_instr(12'd0,  5'd0, 3'b010, 5'd4, 7'b0000011); // lw x4, 0(x0)
+      dut.u_imem.mem[5] = make_b_instr(12'h004, 5'd4, 5'd3, 3'b000);            // beq x3, x4, +8
+      dut.u_imem.mem[6] = make_i_instr(12'd1,  5'd0, 3'b000, 5'd5, 7'b0010011); // addi x5, x0, 1
+      dut.u_imem.mem[7] = make_r_instr(7'b0000000, 5'd4, 5'd3, 3'b100, 5'd6);   // xor x6, x3, x4
+      dut.u_imem.mem[8] = 32'h0000_0000;                                        // invalid = halt
+    end
+  endtask
+
+  initial begin
+    $dumpfile("cpu_core_tb.vcd");
+    $dumpvars(0, cpu_core_tb);
+
+    num_fails = 0;
+
+    $display("Starting CPU core integration test...");
+
+    load_program();
+
+    rst_n = 1'b0;
+    repeat (2) @(posedge clk);
+    rst_n = 1'b1;
+
+    repeat (20) @(posedge clk);
+
+    $display("Final PC    = %h", pc_dbg);
+    
+    $display("Final instr = %h", instr_dbg);
+
+    check_value("x1", dut.u_regfile.regs[1], 32'd5);
+    check_value("x2", dut.u_regfile.regs[2], 32'd7);
+    check_value("x3", dut.u_regfile.regs[3], 32'd12);
+    check_value("dmem[0]", dut.u_dmem.mem[0], 32'd12);
+    check_value("x4", dut.u_regfile.regs[4], 32'd12);
+    check_value("x5", dut.u_regfile.regs[5], 32'd0);
+    check_value("x6", dut.u_regfile.regs[6], 32'd0);
+
+    if (!illegal_instr_dbg) begin
+      $error("CPU did not halt on invalid instruction");
+      num_fails++;
+    end
+
+    if (num_fails == 0) begin
+      $display("CPU CORE TEST PASSED");
+    end else begin
+      $display("CPU CORE TEST FAILED: %0d failures", num_fails);
+    end
+
+    $finish;
+  end
+
+endmodule
