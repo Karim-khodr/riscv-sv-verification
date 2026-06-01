@@ -4,15 +4,6 @@ This project builds and verifies a small single-cycle RV32I RISC-V CPU subset us
 
 The main goal of this project is verification, not just CPU implementation. Each major hardware block is tested with self-checking testbenches, reference models, assertions, directed tests, random tests, waveform dumping, and regression-style Makefile targets.
 
-## Project Goals
-
-* Build a small single-cycle RV32I CPU subset in SystemVerilog
-* Verify each module independently before CPU integration
-* Use self-checking testbenches instead of manual waveform-only checking
-* Add assertions to catch invalid or unexpected behavior
-* Use random testing where useful
-* Generate VCD waveforms for debugging in GTKWave
-* Keep a clean, documented GitHub repo suitable for internship applications
 
 ## Planned Instruction Subset
 
