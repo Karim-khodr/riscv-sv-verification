@@ -10,6 +10,10 @@ module cpu_core_tb;
   logic        illegal_instr_dbg;
 
   int unsigned num_fails;
+  int unsigned fails_before;
+
+  logic        trace_enable = 1'b0;
+  int unsigned cycle_count;
 
   cpu_core dut (
     .clk               (clk),
@@ -18,6 +22,14 @@ module cpu_core_tb;
     .instr_dbg         (instr_dbg),
     .illegal_instr_dbg (illegal_instr_dbg)
   );
+
+  always_ff @(posedge clk) begin
+    if (rst_n && trace_enable) begin
+      $display("TRACE cycle=%0d pc=%h instr=%h illegal=%b",
+              cycle_count, pc_dbg, instr_dbg, illegal_instr_dbg);
+      cycle_count <= cycle_count + 1;
+    end
+  end
 
   always #5 clk <= ~clk;
 
@@ -100,25 +112,37 @@ module cpu_core_tb;
 
   task automatic reset_cpu();
     begin
+      trace_enable = 1'b0;
+      cycle_count  = 0;
+
       rst_n = 1'b0;
       repeat (2) @(posedge clk);
       rst_n = 1'b1;
     end
   endtask
 
-  task automatic run_until_halt(input int unsigned cycles);
+  task automatic run_until_halt(input int unsigned max_cycles);
+    int unsigned cycles;
     begin
-      repeat (cycles) @(posedge clk);
+      cycles = 0;
+      trace_enable = 1'b1;
+
+      while (!illegal_instr_dbg && (cycles < max_cycles)) begin
+        @(posedge clk);
+        cycles++;
+      end
+
+      trace_enable = 1'b0;
 
       $display("Final PC    = %h", pc_dbg);
       $display("Final instr = %h", instr_dbg);
 
       if (!illegal_instr_dbg) begin
-        $error("CPU did not halt on invalid instruction");
+        $error("CPU did not halt on invalid instruction within %0d cycles", max_cycles);
         num_fails++;
-      end
     end
-  endtask
+  end
+endtask
 
   task automatic load_program_1();
     begin
@@ -180,6 +204,39 @@ module cpu_core_tb;
     end
   endtask
 
+  task automatic load_program_3();
+    begin
+      // Program 3:
+      // Tests negative immediate sign extension and taken branch.
+      //
+      // x1 = -1
+      // x2 = 1
+      // x3 = x1 + x2 = 0
+      // beq x3, x0, skip
+      // x4 = 99      // should be skipped
+      // x5 = 42
+      // invalid instruction = halt
+
+      dut.u_imem.mem[0] = make_i_instr(12'hFFF, 5'd0, 3'b000, 5'd1, 7'b0010011); // addi x1, x0, -1
+      dut.u_imem.mem[1] = make_i_instr(12'd1,   5'd0, 3'b000, 5'd2, 7'b0010011); // addi x2, x0, 1
+      dut.u_imem.mem[2] = make_r_instr(7'b0000000, 5'd2, 5'd1, 3'b000, 5'd3);    // add x3, x1, x2
+      dut.u_imem.mem[3] = make_b_instr(12'h004, 5'd0, 5'd3, 3'b000);             // beq x3, x0, +8
+      dut.u_imem.mem[4] = make_i_instr(12'd99,  5'd0, 3'b000, 5'd4, 7'b0010011); // addi x4, x0, 99 skipped
+      dut.u_imem.mem[5] = make_i_instr(12'd42,  5'd0, 3'b000, 5'd5, 7'b0010011); // addi x5, x0, 42
+      dut.u_imem.mem[6] = 32'h0000_0000;                                         // invalid = halt
+    end
+endtask
+
+task automatic check_program_3();
+  begin
+    check_value("program3 x1", dut.u_regfile.regs[1], 32'hFFFF_FFFF);
+    check_value("program3 x2", dut.u_regfile.regs[2], 32'd1);
+    check_value("program3 x3", dut.u_regfile.regs[3], 32'd0);
+    check_value("program3 x4", dut.u_regfile.regs[4], 32'd0);
+    check_value("program3 x5", dut.u_regfile.regs[5], 32'd42);
+  end
+endtask
+
   task automatic check_program_2();
     begin
       check_value("program2 x0",      dut.u_regfile.regs[0],  32'd0);
@@ -210,7 +267,7 @@ module cpu_core_tb;
     run_until_halt(25);
     check_program_1();
 
-    if (num_fails == 0) begin
+    if (num_fails == fails_before) begin
       $display("CPU PROGRAM 1 PASSED");
     end else begin
       $display("CPU PROGRAM 1 FAILED");
@@ -223,10 +280,24 @@ module cpu_core_tb;
     run_until_halt(35);
     check_program_2();
 
-    if (num_fails == 0) begin
+    if (num_fails == fails_before) begin
       $display("CPU PROGRAM 2 PASSED");
     end else begin
       $display("CPU PROGRAM 2 FAILED");
+    end
+
+    $display("Starting CPU program 3...");
+    fails_before = num_fails;
+    clear_memories();
+    load_program_3();
+    reset_cpu();
+    run_until_halt(25);
+    check_program_3();
+
+    if (num_fails == fails_before) begin
+      $display("CPU PROGRAM 3 PASSED");
+    end else begin
+      $display("CPU PROGRAM 3 FAILED");
     end
 
     if (num_fails == 0) begin
