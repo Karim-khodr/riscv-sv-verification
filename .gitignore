@@ -12,10 +12,11 @@ obj_dir_*/
 # Logs
 *.log
 
-# Editor files
+# Editor / OS files
 .vscode/
 *.swp
+*.swo
 .DS_Store
 
-# Generated binaries
+# Generated Verilator binaries
 V*
