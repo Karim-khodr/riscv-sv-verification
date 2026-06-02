@@ -46,7 +46,7 @@ Required instructions:
 * [x] Immediate generator
 * [x] Decoder
 * [x] Control logic
-* [ ] CPU integration
+* [x] CPU integration
 * [ ] Program-level tests
 * [ ] Verification report
 
