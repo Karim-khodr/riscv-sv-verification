@@ -89,9 +89,40 @@ module cpu_core_tb;
     end
   endtask
 
-  task automatic load_program();
+  task automatic clear_memories();
     begin
-      // Program:
+      for (int i = 0; i < 256; i++) begin
+        dut.u_imem.mem[i] = 32'd0;
+        dut.u_dmem.mem[i] = 32'd0;
+      end
+    end
+  endtask
+
+  task automatic reset_cpu();
+    begin
+      rst_n = 1'b0;
+      repeat (2) @(posedge clk);
+      rst_n = 1'b1;
+    end
+  endtask
+
+  task automatic run_until_halt(input int unsigned cycles);
+    begin
+      repeat (cycles) @(posedge clk);
+
+      $display("Final PC    = %h", pc_dbg);
+      $display("Final instr = %h", instr_dbg);
+
+      if (!illegal_instr_dbg) begin
+        $error("CPU did not halt on invalid instruction");
+        num_fails++;
+      end
+    end
+  endtask
+
+  task automatic load_program_1();
+    begin
+      // Program 1:
       // x1 = 5
       // x2 = 7
       // x3 = x1 + x2 = 12
@@ -114,37 +145,88 @@ module cpu_core_tb;
     end
   endtask
 
+  task automatic check_program_1();
+    begin
+      check_value("program1 x1",      dut.u_regfile.regs[1], 32'd5);
+      check_value("program1 x2",      dut.u_regfile.regs[2], 32'd7);
+      check_value("program1 x3",      dut.u_regfile.regs[3], 32'd12);
+      check_value("program1 dmem[0]", dut.u_dmem.mem[0],     32'd12);
+      check_value("program1 x4",      dut.u_regfile.regs[4], 32'd12);
+      check_value("program1 x5",      dut.u_regfile.regs[5], 32'd0);
+      check_value("program1 x6",      dut.u_regfile.regs[6], 32'd0);
+    end
+  endtask
+
+  task automatic load_program_2();
+    begin
+      // Program 2:
+      // Tests sub, and, or, xori, andi, ori, beq not taken,
+      // x0 protection, and memory access at nonzero address.
+
+      dut.u_imem.mem[0]  = make_i_instr(12'd123, 5'd0, 3'b000, 5'd0,  7'b0010011); // addi x0, x0, 123 ignored
+      dut.u_imem.mem[1]  = make_i_instr(12'd15,  5'd0, 3'b000, 5'd1,  7'b0010011); // addi x1, x0, 15
+      dut.u_imem.mem[2]  = make_i_instr(12'd5,   5'd0, 3'b000, 5'd2,  7'b0010011); // addi x2, x0, 5
+      dut.u_imem.mem[3]  = make_r_instr(7'b0100000, 5'd2, 5'd1, 3'b000, 5'd3);     // sub x3, x1, x2 = 10
+      dut.u_imem.mem[4]  = make_r_instr(7'b0000000, 5'd2, 5'd1, 3'b111, 5'd4);     // and x4, x1, x2 = 5
+      dut.u_imem.mem[5]  = make_r_instr(7'b0000000, 5'd2, 5'd1, 3'b110, 5'd5);     // or x5, x1, x2 = 15
+      dut.u_imem.mem[6]  = make_i_instr(12'd10,  5'd1, 3'b100, 5'd6,  7'b0010011); // xori x6, x1, 10 = 5
+      dut.u_imem.mem[7]  = make_i_instr(12'd6,   5'd1, 3'b111, 5'd7,  7'b0010011); // andi x7, x1, 6 = 6
+      dut.u_imem.mem[8]  = make_i_instr(12'd8,   5'd2, 3'b110, 5'd8,  7'b0010011); // ori x8, x2, 8 = 13
+      dut.u_imem.mem[9]  = make_b_instr(12'h004, 5'd2, 5'd1, 3'b000);              // beq x1, x2, +8 not taken
+      dut.u_imem.mem[10] = make_i_instr(12'd99,  5'd0, 3'b000, 5'd9,  7'b0010011); // addi x9, x0, 99 executes
+      dut.u_imem.mem[11] = make_s_instr(12'd16,  5'd9, 5'd0, 3'b010);              // sw x9, 16(x0)
+      dut.u_imem.mem[12] = make_i_instr(12'd16,  5'd0, 3'b010, 5'd10, 7'b0000011); // lw x10, 16(x0)
+      dut.u_imem.mem[13] = 32'h0000_0000;                                          // invalid = halt
+    end
+  endtask
+
+  task automatic check_program_2();
+    begin
+      check_value("program2 x0",      dut.u_regfile.regs[0],  32'd0);
+      check_value("program2 x1",      dut.u_regfile.regs[1],  32'd15);
+      check_value("program2 x2",      dut.u_regfile.regs[2],  32'd5);
+      check_value("program2 x3",      dut.u_regfile.regs[3],  32'd10);
+      check_value("program2 x4",      dut.u_regfile.regs[4],  32'd5);
+      check_value("program2 x5",      dut.u_regfile.regs[5],  32'd15);
+      check_value("program2 x6",      dut.u_regfile.regs[6],  32'd5);
+      check_value("program2 x7",      dut.u_regfile.regs[7],  32'd6);
+      check_value("program2 x8",      dut.u_regfile.regs[8],  32'd13);
+      check_value("program2 x9",      dut.u_regfile.regs[9],  32'd99);
+      check_value("program2 dmem[4]", dut.u_dmem.mem[4],      32'd99);
+      check_value("program2 x10",     dut.u_regfile.regs[10], 32'd99);
+    end
+  endtask
+
   initial begin
     $dumpfile("cpu_core_tb.vcd");
     $dumpvars(0, cpu_core_tb);
 
     num_fails = 0;
 
-    $display("Starting CPU core integration test...");
+    $display("Starting CPU program 1...");
+    clear_memories();
+    load_program_1();
+    reset_cpu();
+    run_until_halt(25);
+    check_program_1();
 
-    load_program();
+    if (num_fails == 0) begin
+      $display("CPU PROGRAM 1 PASSED");
+    end else begin
+      $display("CPU PROGRAM 1 FAILED");
+    end
 
-    rst_n = 1'b0;
-    repeat (2) @(posedge clk);
-    rst_n = 1'b1;
+    $display("Starting CPU program 2...");
+    clear_memories();
+    load_program_2();
+    reset_cpu();
+    run_until_halt(35);
+    check_program_2();
 
-    repeat (20) @(posedge clk);
-
-    $display("Final PC    = %h", pc_dbg);
-    
-    $display("Final instr = %h", instr_dbg);
-
-    check_value("x1", dut.u_regfile.regs[1], 32'd5);
-    check_value("x2", dut.u_regfile.regs[2], 32'd7);
-    check_value("x3", dut.u_regfile.regs[3], 32'd12);
-    check_value("dmem[0]", dut.u_dmem.mem[0], 32'd12);
-    check_value("x4", dut.u_regfile.regs[4], 32'd12);
-    check_value("x5", dut.u_regfile.regs[5], 32'd0);
-    check_value("x6", dut.u_regfile.regs[6], 32'd0);
-
-    if (!illegal_instr_dbg) begin
-      $error("CPU did not halt on invalid instruction");
-      num_fails++;
+    if (num_fails == 0) begin
+      $display("CPU PROGRAM 2 PASSED");
+    end else begin
+      $display("CPU PROGRAM 2 FAILED");
     end
 
     if (num_fails == 0) begin
