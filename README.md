@@ -35,22 +35,22 @@ Required instructions:
 ## Current Status
 
 * [x] Project structure created
-* [x] ALU RTL implemented
-* [x] ALU directed tests passing
-* [x] ALU random tests passing
-* [x] ALU reference model / scoreboard added
-* [x] ALU assertions added
-* [x] Verilator lint passing
-* [x] Waveform generation working
-* [x] Register file
-* [x] Immediate generator
-* [x] Decoder
-* [x] Control logic
-* [x] CPU integration
-* [ ] Program-level tests
-* [ ] Verification report
+* [x] ALU RTL implemented and verified
+* [x] Register file RTL implemented and verified
+* [x] Immediate generator RTL implemented and verified
+* [x] Decoder/control unit implemented and verified
+* [x] Single-cycle CPU core integrated
+* [x] CPU program-level tests passing
+* [x] CPU execution trace added
+* [x] Verilator lint targets added
+* [x] VCD waveform generation working
+* [x] Test plan started
+* [x] Verification report started
+* [ ] Additional CPU programs
+* [ ] Optional Yosys synthesis sanity check
+* [ ] Final README polish
 
-## Running Simulations
+## Running the Full Regression
 
 From the `sim/` directory:
 
@@ -60,25 +60,26 @@ make lint
 make all
 ```
 
-To open the ALU waveform:
+Expected passing tests:
 
-```bash
-make wave
+```text
+ALU TEST PASSED
+REGFILE TEST PASSED
+IMM_GEN TEST PASSED
+DECODER TEST PASSED
+CPU PROGRAM 1 PASSED
+CPU PROGRAM 2 PASSED
+CPU PROGRAM 3 PASSED
+CPU CORE TEST PASSED
 ```
 
-## Verification Approach
+## CPU Debug Trace
 
-The verification strategy is to test each CPU block independently before integrating the full CPU. Each testbench is designed to be self-checking and compares the RTL output against an expected result or reference model.
+The CPU integration testbench prints an execution trace during program execution:
 
-Current ALU verification includes:
+```text
+TRACE cycle=0 pc=00000000 instr=00500093 illegal=0
+TRACE cycle=1 pc=00000004 instr=00700113 illegal=0
+```
 
-* Directed tests for known edge cases
-* Random tests for broader input coverage
-* Reference model comparison
-* Assertions for unknown inputs
-* VCD waveform dumping for GTKWave debug
-* Pass/fail summary printed at the end of simulation
-
-## Author
-
-Built as a personal digital design and verification project focused on SystemVerilog, RISC-V, and hardware verification.
+This helps debug instruction execution, branching, and halt behavior.
